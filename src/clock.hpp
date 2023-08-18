@@ -15,8 +15,10 @@
 
 #include <cstdint>
 #include <chrono>
+#include <thread>
 #include <stdexcept>
 #include <sstream>
+#include <cstdio>
 
 namespace ipc {
 
@@ -54,20 +56,36 @@ static inline void setRealtime(void) {
 #ifdef _WIN32
 
 	auto res = SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS);
-	if (!res) {
+	if (res == 0) {
 		std::stringstream ss;
-		ss << "setRealtime(_WIN32): " << winGetLastError();
+		ss << "ipc::setRealtime(_WIN32): SetPriorityClass: " << winGetLastError();
 		throw std::runtime_error(ss.str());
 	}
+
+	auto priority = GetPriorityClass(GetCurrentProcess());
+	if (priority == 0) {
+		std::stringstream ss;
+		ss << "ipc::setRealtime(_WIN32): GetPriorityClass: " << winGetLastError();
+		throw std::runtime_error(ss.str());
+	}
+	if (priority != REALTIME_PRIORITY_CLASS) {
+		std::stringstream ss;
+		ss << "ipc::setRealtime(_WIN32): " << "System call did succeed but priority is still lower than required (have 0x" << std::hex << priority << "). Try running the program with administrator priviledges to have the realtime mode go through.";
+		throw std::runtime_error(ss.str());
+	}
+
+	std::printf("ipc::setRealtime: Certified now running in realtime mode!\n");
 
 #else
 
 	auto res = nice(-20);
 	if (res == -1) {
 		std::stringstream ss;
-		ss << "setRealtime(unistd.h): " << strerror(errno);
+		ss << "ipc::setRealtime(unistd.h): " << strerror(errno);
 		throw std::runtime_error(ss.str());
 	}
+
+	std::printf("ipc::setRealtime: Nice value for the process is now %d\n", res);
 
 #endif
 }
@@ -95,7 +113,9 @@ class DurationMeasurer
 	Duration m_overhead;
 
 	// How many dummy samplings to average to calibrate
-	static inline constexpr size_t calibrationIterationCount = 1 << 16;
+	// Warning: do not set this too high, as std::this_thread::sleep_for may just skip
+	static inline constexpr size_t calibrationIterationCount = 1 << 8;
+	static inline constexpr double calibrationLengthSeconds = 4.0;
 
 public:
 	DurationMeasurer(void) :
@@ -139,15 +159,25 @@ public:
 
 private:
 	Duration computeCalibration(void) const {
+
+		std::printf("ipc::DurationMeasurer::computeCalibration: calibrating, this should take around %g seconds..\n", calibrationLengthSeconds);
+
+		constexpr double lengthPerIteration = calibrationLengthSeconds / static_cast<double>(calibrationIterationCount);
+
+
 		Duration durations[calibrationIterationCount];
 
-		// Warmup batch
-		for (size_t i = 0; i < calibrationIterationCount; i++)
+		for (size_t i = 0; i < calibrationIterationCount; i++) {
+			std::this_thread::sleep_for(std::chrono::duration<double>(lengthPerIteration));
+			// Warmup
+			for (size_t i = 0; i < 64; i++) {
+				durations[i] = measure([](){}, false);
+			}
+			// Actual data
 			durations[i] = measure([](){}, false);
+		}
 
-		// Actual data
-		for (size_t i = 0; i < calibrationIterationCount; i++)
-			durations[i] = measure([](){}, false);
+		std::printf("ipc::DurationMeasurer::computeCalibration: calibration done.\n");
 
 		Duration res = {
 			.lengthCycles = 0,
