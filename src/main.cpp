@@ -1,10 +1,12 @@
 #include <cstdio>
-#include "clock_timestamp.hpp"
+#include "clock.hpp"
 
 int main(void) {
-	auto begin = ipc::getClockTimestamp();
-	std::printf("Some message!\n");
-	auto end = ipc::getClockTimestamp();
-	std::printf("Last message needed %zu cycles to complete\n", end - begin);
+	auto measurer = ipc::DurationMeasurer();
+	measurer.calibrate();
+	auto len = measurer.measure([](){
+		std::printf("Some message!\n");
+	});
+	std::printf("Last message needed %zu cycles to complete, inferred freq = %g MHz\n", len.lengthCycles, len.inferredFrequencyMHz());
 	return 0;
 }
