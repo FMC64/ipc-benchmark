@@ -106,6 +106,11 @@ public:
 	{
 	}
 
+	// Only informative, do not use these timings yourself, measure already does the compensation by default
+	Duration getOverhead(void) const {
+		return m_overhead;
+	}
+
 	template <typename Fn>
 	Duration measure(Fn &&fn, bool compensate = true) const {
 		auto beginChrono = std::chrono::high_resolution_clock::now();

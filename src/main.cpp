@@ -8,6 +8,10 @@ int main(void) {
 
 		auto measurer = ipc::DurationMeasurer();
 		measurer.calibrate();
+		{
+			auto overhead = measurer.getOverhead();
+			std::printf("Overhead: %zu cycles, %g ns\n", overhead.lengthCycles, overhead.lengthSeconds * 1.0e9);
+		}
 
 		auto len = measurer.measure([](){
 			std::printf("Some message!\n");
