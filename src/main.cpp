@@ -14,10 +14,10 @@ int main(void) {
 		}
 
 		auto len = measurer.measure([](){
-			std::printf("Some message!\n");
+			std::printf("BENCHMARK std::printf: Some message!\n");
 		});
 
-		std::printf("Last message needed %zu cycles to complete, inferred freq = %g MHz\n", len.lengthCycles, len.inferredFrequencyMHz());
+		std::printf("std::printf: %zu cycles, inferred frequency = %g MHz\n", len.lengthCycles, len.inferredFrequencyMHz());
 	} catch (const std::exception &e) {
 		std::fprintf(stderr, "FATAL ERROR: %s\n", e.what());
 	}
