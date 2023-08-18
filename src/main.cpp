@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <fstream>
+#include <cstdlib>
 #include "clock.hpp"
 #include "benchmark.hpp"
 
@@ -132,6 +133,15 @@ int main(void) {
 		benchmark<1 << 16>(measurer, cpuInfoCStr, output);
 	} catch (const std::exception &e) {
 		std::fprintf(stderr, "FATAL ERROR: %s\n", e.what());
+
+		#ifdef _WIN32
+		// Do not prompt if running in an msys terminal
+		if (std::getenv("MSYSTEM") == nullptr) {
+			std::printf("\n");
+			std::printf("Press return to exit..\n");
+			std::getchar();
+		}
+		#endif
 	}
 	return 0;
 }
