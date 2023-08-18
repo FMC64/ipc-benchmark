@@ -20,75 +20,97 @@ static inline void benchmarkOp(const ipc::DurationMeasurer &durationMeasurer, co
 	}
 }
 
+static inline constexpr size_t maxBufferSize = 1 << 16;
+
+static auto buffer = ipc::Buffer(maxBufferSize);
+static const auto srcBuffer = ipc::Buffer(maxBufferSize);
+
 template <size_t BufferSize>
 static inline void benchmark(const ipc::DurationMeasurer &durationMeasurer, const char *cpuInfo, std::ostream &output) {
-	auto buffer = ipc::Buffer(BufferSize);
+	static_assert(BufferSize <= maxBufferSize, "BufferSize must not exceed maxBufferSize");
 
-	const auto srcBufferU16 = ipc::Buffer(BufferSize);
-	auto u16Data = reinterpret_cast<uint16_t * const>(srcBufferU16.data);
-	auto u16Count = BufferSize / sizeof(uint16_t);
-	for (size_t i = 0; i < u16Count; i++)
-		u16Data[i] = 1 % 4 == 0 ? (1 << 12) - i + 7 : i + 487;
+	auto writeU16Data = []() {
+		auto u16Data = reinterpret_cast<uint16_t * const>(srcBuffer.data);
+		auto u16Count = BufferSize / sizeof(uint16_t);
+		for (size_t i = 0; i < u16Count; i++)
+			u16Data[i] = 1 % 4 == 0 ? (1 << 12) - i + 7 : i + 487;
+	};
+	auto writeU32Data = []() {
+		auto u32Data = reinterpret_cast<uint32_t * const>(srcBuffer.data);
+		auto u32Count = BufferSize / sizeof(uint32_t);
+		for (size_t i = 0; i < u32Count; i++)
+			u32Data[i] = 1 % 4 == 0 ? (1 << 20) - i + 7 : i + 16487;
+	};
 
-	const auto srcBufferU32 = ipc::Buffer(BufferSize);
-	auto u32Data = reinterpret_cast<uint32_t * const>(srcBufferU32.data);
-	auto u32Count = BufferSize / sizeof(uint32_t);
-	for (size_t i = 0; i < u32Count; i++)
-		u32Data[i] = 1 % 4 == 0 ? (1 << 20) - i + 7 : i + 16487;
+	auto writeU64Data = []() {
+		auto u64Data = reinterpret_cast<uint64_t * const>(srcBuffer.data);
+		auto u64Count = BufferSize / sizeof(uint64_t);
+		for (size_t i = 0; i < u64Count; i++)
+			u64Data[i] = 1 % 4 == 0 ? (static_cast<size_t>(1) << 42) - i + 7 : i + 16487;
+	};
 
-	const auto srcBufferU64 = ipc::Buffer(BufferSize);
-	auto u64Data = reinterpret_cast<uint64_t * const>(srcBufferU64.data);
-	auto u64Count = BufferSize / sizeof(uint64_t);
-	for (size_t i = 0; i < u64Count; i++)
-		u64Data[i] = 1 % 4 == 0 ? (static_cast<size_t>(1) << 42) - i + 7 : i + 16487;
-
-	benchmarkOp<uint16_t, BufferSize>(durationMeasurer, srcBufferU16, buffer, [](uint16_t /*a*/, uint16_t b) {
+	writeU16Data();
+	benchmarkOp<uint16_t, BufferSize>(durationMeasurer, srcBuffer, buffer, [](uint16_t /*a*/, uint16_t b) {
 		return b;
 	}, "0 * u16 + u16", cpuInfo, output);
-	benchmarkOp<uint32_t, BufferSize>(durationMeasurer, srcBufferU32, buffer, [](uint32_t /*a*/, uint32_t b) {
+	writeU32Data();
+	benchmarkOp<uint32_t, BufferSize>(durationMeasurer, srcBuffer, buffer, [](uint32_t /*a*/, uint32_t b) {
 		return b;
 	}, "0 * u32 + u32", cpuInfo, output);
-	benchmarkOp<uint64_t, BufferSize>(durationMeasurer, srcBufferU64, buffer, [](uint64_t /*a*/, uint64_t b) {
+	writeU64Data();
+	benchmarkOp<uint64_t, BufferSize>(durationMeasurer, srcBuffer, buffer, [](uint64_t /*a*/, uint64_t b) {
 		return b;
 	}, "0 * u64 + u64", cpuInfo, output);
 
-	benchmarkOp<uint16_t, BufferSize>(durationMeasurer, srcBufferU16, buffer, [](uint16_t a, uint16_t b) {
+	writeU16Data();
+	benchmarkOp<uint16_t, BufferSize>(durationMeasurer, srcBuffer, buffer, [](uint16_t a, uint16_t b) {
 		return a + b;
 	}, "u16 + u16", cpuInfo, output);
-	benchmarkOp<uint32_t, BufferSize>(durationMeasurer, srcBufferU32, buffer, [](uint32_t a, uint32_t b) {
+	writeU32Data();
+	benchmarkOp<uint32_t, BufferSize>(durationMeasurer, srcBuffer, buffer, [](uint32_t a, uint32_t b) {
 		return a + b;
 	}, "u32 + u32", cpuInfo, output);
-	benchmarkOp<uint64_t, BufferSize>(durationMeasurer, srcBufferU64, buffer, [](uint64_t a, uint64_t b) {
+	writeU64Data();
+	benchmarkOp<uint64_t, BufferSize>(durationMeasurer, srcBuffer, buffer, [](uint64_t a, uint64_t b) {
 		return a + b;
 	}, "u64 + u64", cpuInfo, output);
 
-	benchmarkOp<uint16_t, BufferSize>(durationMeasurer, srcBufferU16, buffer, [](uint16_t a, uint16_t b) {
+	writeU16Data();
+	benchmarkOp<uint16_t, BufferSize>(durationMeasurer, srcBuffer, buffer, [](uint16_t a, uint16_t b) {
 		return a - b;
 	}, "u16 - u16", cpuInfo, output);
-	benchmarkOp<uint32_t, BufferSize>(durationMeasurer, srcBufferU32, buffer, [](uint32_t a, uint32_t b) {
+	writeU32Data();
+	benchmarkOp<uint32_t, BufferSize>(durationMeasurer, srcBuffer, buffer, [](uint32_t a, uint32_t b) {
 		return a - b;
 	}, "u32 - u32", cpuInfo, output);
-	benchmarkOp<uint64_t, BufferSize>(durationMeasurer, srcBufferU64, buffer, [](uint64_t a, uint64_t b) {
+	writeU64Data();
+	benchmarkOp<uint64_t, BufferSize>(durationMeasurer, srcBuffer, buffer, [](uint64_t a, uint64_t b) {
 		return a - b;
 	}, "u64 - u64", cpuInfo, output);
 
-	benchmarkOp<uint16_t, BufferSize>(durationMeasurer, srcBufferU16, buffer, [](uint16_t a, uint16_t b) {
+	writeU16Data();
+	benchmarkOp<uint16_t, BufferSize>(durationMeasurer, srcBuffer, buffer, [](uint16_t a, uint16_t b) {
 		return a / b;
 	}, "u16 / u16", cpuInfo, output);
-	benchmarkOp<uint32_t, BufferSize>(durationMeasurer, srcBufferU32, buffer, [](uint32_t a, uint32_t b) {
+	writeU32Data();
+	benchmarkOp<uint32_t, BufferSize>(durationMeasurer, srcBuffer, buffer, [](uint32_t a, uint32_t b) {
 		return a / b;
 	}, "u32 / u32", cpuInfo, output);
-	benchmarkOp<uint64_t, BufferSize>(durationMeasurer, srcBufferU64, buffer, [](uint64_t a, uint64_t b) {
+	writeU64Data();
+	benchmarkOp<uint64_t, BufferSize>(durationMeasurer, srcBuffer, buffer, [](uint64_t a, uint64_t b) {
 		return a / b;
 	}, "u64 / u64", cpuInfo, output);
 
-	benchmarkOp<uint16_t, BufferSize>(durationMeasurer, srcBufferU16, buffer, [](uint16_t a, uint16_t b) {
+	writeU16Data();
+	benchmarkOp<uint16_t, BufferSize>(durationMeasurer, srcBuffer, buffer, [](uint16_t a, uint16_t b) {
 		return a * b;
 	}, "u16 * u16", cpuInfo, output);
-	benchmarkOp<uint32_t, BufferSize>(durationMeasurer, srcBufferU32, buffer, [](uint32_t a, uint32_t b) {
+	writeU32Data();
+	benchmarkOp<uint32_t, BufferSize>(durationMeasurer, srcBuffer, buffer, [](uint32_t a, uint32_t b) {
 		return a * b;
 	}, "u32 * u32", cpuInfo, output);
-	benchmarkOp<uint64_t, BufferSize>(durationMeasurer, srcBufferU64, buffer, [](uint64_t a, uint64_t b) {
+	writeU64Data();
+	benchmarkOp<uint64_t, BufferSize>(durationMeasurer, srcBuffer, buffer, [](uint64_t a, uint64_t b) {
 		return a * b;
 	}, "u64 * u64", cpuInfo, output);
 	std::printf("\n");

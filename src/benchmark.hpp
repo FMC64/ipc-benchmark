@@ -100,7 +100,7 @@ static inline void assertBufferSizeAtLeast(const Buffer &a, size_t minSize) {
 // srcBuffer contains the data to be processed in parallel: packs of [T a, T b, T res, T padding]
 template <typename T, size_t BufferSize, typename Op>
 Duration computeCyleCountPerOpPipelined(const ipc::DurationMeasurer &durationMeasurer, const Buffer &srcBuffer, Buffer &buffer, Op &&op) {
-	assertBufferSize(srcBuffer, BufferSize);
+	assertBufferSizeAtLeast(srcBuffer, BufferSize);
 	assertBufferSize(srcBuffer, buffer.size);
 	assertBufferSizeMultipleOf(srcBuffer, sizeof(T) * 4);
 
@@ -135,7 +135,7 @@ Duration computeCyleCountPerOpPipelined(const ipc::DurationMeasurer &durationMea
 // srcBuffer contains the data to be processed serially: packs of [T first, T accumulated0, T accumulated1, ..., T res]
 template <typename T, size_t BufferSize, typename Op>
 Duration computeCyleCountPerOpSequentially(const ipc::DurationMeasurer &durationMeasurer, const Buffer &srcBuffer, Buffer &buffer, Op &&op) {
-	assertBufferSize(srcBuffer, BufferSize);
+	assertBufferSizeAtLeast(srcBuffer, BufferSize);
 	assertBufferSize(srcBuffer, buffer.size);
 	assertBufferSizeAtLeast(srcBuffer, sizeof(T) * 2);
 
