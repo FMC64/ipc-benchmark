@@ -8,13 +8,25 @@
 
 namespace ipc {
 
+static void* mallocAligned(size_t alignment, size_t size) {
+	#ifdef _WIN32
+
+	return _aligned_malloc(size, alignment);
+
+	#else
+
+	return aligned_alloc(alignment, size);
+
+	#endif
+}
+
 struct Buffer {
 	const size_t size;
 	void * const data;
 
 	Buffer(size_t size) :
 		size(size),
-		data(std::malloc(size))
+		data(mallocAligned(1 << 16, size))
 	{
 		if (size > 0 && data == nullptr) {
 			std::stringstream ss;
