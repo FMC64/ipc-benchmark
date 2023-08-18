@@ -1,3 +1,4 @@
 *.o
 /ipc-benchmark
 /ipc-benchmark.exe
+/report.csv
