@@ -49,6 +49,8 @@ static inline void benchmark(const ipc::DurationMeasurer &durationMeasurer) {
 
 int main(void) {
 	try {
+		auto cpuInfo = ipc::getCPUInfo();
+
 		// Necessary to accurately estimate CPUs frequency from cycle count and std::chrono
 		ipc::setRealtime();
 
@@ -57,6 +59,7 @@ int main(void) {
 		{
 			auto overhead = measurer.getOverhead();
 			std::printf("Overhead: %g cycles, %g ns\n", overhead.lengthCycles, overhead.lengthSeconds * 1.0e9);
+			std::printf("CPU identified as '%s'\n", cpuInfo.c_str());
 		}
 
 		std::printf("\n");
