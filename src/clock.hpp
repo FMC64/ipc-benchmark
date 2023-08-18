@@ -78,7 +78,7 @@ static inline void setRealtime(void) {
 
 #else
 
-	std::printf("ipc::setRealtime: Disclaimer: it is advised not to run this in WSL unless it WSL itself is running as realtime (which sounds like a crazy & horribly scary idea). Just pick up the Windows binary in this case.\n");
+	std::printf("ipc::setRealtime: Disclaimer: it is advised not to run this in WSL unless WSL itself is running as realtime (which sounds like a crazy & horribly scary idea). Just pick up the Windows binary in this case.\n");
 
 	auto res = nice(-20);
 	if (res == -1) {

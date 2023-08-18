@@ -1,4 +1,14 @@
-CPPFLAGS = -Wall -Wextra -std=c++23 -O3
+# Build options begin
+#USE_ASAN = true
+# Build options end
+
+NULL =
+CXXFLAGS_ASAN =
+CXXFLAGS = -Wall -Wextra -std=c++23 -O3$(CXXFLAGS_ASAN)
+
+ifdef USE_ASAN
+	CXXFLAGS_ASAN = $(NULL) -fsanitize=address -fno-omit-frame-pointer
+endif
 
 TARGET = ipc-benchmark
 all: $(TARGET)
