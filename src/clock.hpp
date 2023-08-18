@@ -78,6 +78,8 @@ static inline void setRealtime(void) {
 
 #else
 
+	std::printf("ipc::setRealtime: Disclaimer: it is advised not to run this in WSL unless it WSL itself is running as realtime (which sounds like a crazy & horribly scary idea). Just pick up the Windows binary in this case.\n");
+
 	auto res = nice(-20);
 	if (res == -1) {
 		std::stringstream ss;
@@ -160,7 +162,7 @@ public:
 private:
 	Duration computeCalibration(void) const {
 
-		std::printf("ipc::DurationMeasurer::computeCalibration: calibrating, this should take around %g seconds..\n", calibrationLengthSeconds);
+		std::printf("ipc::DurationMeasurer::computeCalibration: Calibrating, this should take around %g seconds..\n", calibrationLengthSeconds);
 
 		constexpr double lengthPerIteration = calibrationLengthSeconds / static_cast<double>(calibrationIterationCount);
 
@@ -177,7 +179,7 @@ private:
 			durations[i] = measure([](){}, false);
 		}
 
-		std::printf("ipc::DurationMeasurer::computeCalibration: calibration done.\n");
+		std::printf("ipc::DurationMeasurer::computeCalibration: Calibration done.\n");
 
 		Duration res = {
 			.lengthCycles = 0,
