@@ -96,6 +96,14 @@ static inline void assertBufferSizeAtLeast(const Buffer &a, size_t minSize) {
 	}
 }
 
+template <size_t WordCount, size_t Off, typename T, typename Op>
+static inline void computeCyleCountPerOpPipelinedIteration(T * const words, Op &&op) {
+	if constexpr (Off < WordCount) {
+		words[Off + 2] = op(words[Off + 0], words[Off + 1]);
+		computeCyleCountPerOpPipelinedIteration<WordCount, Off + 4>(words, op);
+	}
+};
+
 // Op is `T (T a, T b)`
 // srcBuffer contains the data to be processed in parallel: packs of [T a, T b, T res, T padding]
 template <typename T, size_t BufferSize, typename Op>
@@ -112,11 +120,7 @@ Duration computeCyleCountPerOpPipelined(const ipc::DurationMeasurer &durationMea
 		auto words = reinterpret_cast<T * const>(buffer.data);
 
 		return durationMeasurer.measure([&]() {
-			size_t off = 0;
-			for (size_t i = 0; i < opCount; i++) {
-				words[off + 2] = op(words[off + 0], words[off + 1]);
-				off += 4;
-			}
+			computeCyleCountPerOpPipelinedIteration<wordCount, 0>(words, std::forward<Op>(op));
 		});
 	};
 
