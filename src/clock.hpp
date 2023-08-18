@@ -97,11 +97,34 @@ static inline size_t getClockTimestamp(void) {
 }
 
 struct Duration {
-	size_t lengthCycles;
+	double lengthCycles;
 	double lengthSeconds;
 
+	Duration operator/(size_t n) const {
+		return Duration{
+			.lengthCycles = lengthCycles / static_cast<double>(n),
+			.lengthSeconds = lengthSeconds / static_cast<double>(n)
+		};
+	}
+
+	template <size_t N>
+	static Duration average(const Duration (&samples)[N]) {
+		Duration res = {
+			.lengthCycles = 0.0,
+			.lengthSeconds = 0.0
+		};
+
+		for (size_t i = 0; i < N; i++) {
+			auto cur = samples[i];
+			res.lengthCycles += cur.lengthCycles;
+			res.lengthSeconds += cur.lengthSeconds;
+		}
+
+		return res / N;
+	}
+
 	double inferredFrequency(void) const {
-		return static_cast<double>(lengthCycles) / lengthSeconds;
+		return lengthCycles / lengthSeconds;
 	}
 
 	double inferredFrequencyMHz(void) const {
@@ -122,7 +145,7 @@ class DurationMeasurer
 public:
 	DurationMeasurer(void) :
 		m_overhead({
-			.lengthCycles = 0,
+			.lengthCycles = 0.0,
 			.lengthSeconds = 0.0
 		})
 	{
@@ -133,6 +156,7 @@ public:
 		return m_overhead;
 	}
 
+	// Fn is `void (void)`
 	template <typename Fn>
 	Duration measure(Fn &&fn, bool compensate = true) const {
 		auto beginChrono = std::chrono::high_resolution_clock::now();
@@ -142,19 +166,19 @@ public:
 		auto endChrono = std::chrono::high_resolution_clock::now();
 
 		auto res = Duration{
-			.lengthCycles = end - begin,
+			.lengthCycles = static_cast<double>(end - begin),
 			.lengthSeconds = std::chrono::duration<double>(endChrono - beginChrono).count()
 		};
 		if (compensate) {
 			if (res.lengthCycles > m_overhead.lengthCycles)
 				res.lengthCycles -= m_overhead.lengthCycles;
 			else
-				res.lengthCycles = 0;
+				res.lengthCycles = 0.0;
 
 			if (res.lengthSeconds > m_overhead.lengthSeconds)
 				res.lengthSeconds -= m_overhead.lengthSeconds;
 			else
-				res.lengthSeconds = 0;
+				res.lengthSeconds = 0.0;
 		}
 		return res;
 	}
@@ -181,18 +205,7 @@ private:
 
 		std::printf("ipc::DurationMeasurer::computeCalibration: Calibration done.\n");
 
-		Duration res = {
-			.lengthCycles = 0,
-			.lengthSeconds = 0.0
-		};
-		for (size_t i = 0; i < calibrationIterationCount; i++) {
-			auto cur = durations[i];
-			res.lengthCycles += cur.lengthCycles;
-			res.lengthSeconds += cur.lengthSeconds;
-		}
-		res.lengthCycles /= calibrationIterationCount;
-		res.lengthSeconds /= static_cast<double>(calibrationIterationCount);
-		return res;
+		return Duration::average(durations);
 	}
 
 public:

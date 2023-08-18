@@ -3,13 +3,14 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <sstream>
+#include <cstring>
 #include "clock.hpp"
 
 namespace ipc {
 
 struct Buffer {
-	size_t size;
-	void *data;
+	const size_t size;
+	void * const data;
 
 	Buffer(size_t size) :
 		size(size),
@@ -37,15 +38,15 @@ public:
 		size(other.size),
 		data(other.data)
 	{
-		other.data = nullptr;
+		const_cast<void*&>(other.data) = nullptr;
 	}
 	Buffer& operator=(Buffer &&other) {
 		release();
 
-		size = other.size;
-		data = other.data;
+		const_cast<size_t&>(size) = other.size;
+		const_cast<void*&>(data) = other.data;
 
-		other.data = nullptr;
+		const_cast<void*&>(other.data) = nullptr;
 
 		return *this;
 	}
@@ -53,8 +54,69 @@ public:
 	~Buffer(void) {
 		release();
 
-		data = nullptr;
+		const_cast<void*&>(data) = nullptr;
 	}
 };
+
+static inline constexpr size_t cycleCountIterationCount = 1 << 16;
+
+static inline void assertBufferSize(const Buffer &buffer, size_t exactSize) {
+	if (buffer.size != exactSize) {
+		std::stringstream ss;
+		ss << "ipc::assertBufferSize: Failed: sizeof(a) ( = " << buffer.size << ") != " << exactSize;
+		throw std::runtime_error(ss.str());
+	}
+}
+
+static inline void assertBufferSizeMultipleOf(const Buffer &a, size_t alignment) {
+	if (a.size % alignment != 0) {
+		std::stringstream ss;
+		ss << "ipc::assertBufferSizeMultipleOf: Failed: sizeof(a) is offset by " << (a.size % alignment) << " bytes, requested alignment on " << alignment << " bytes";
+		throw std::runtime_error(ss.str());
+	}
+}
+
+static inline void assertBufferSizeAtLeast(const Buffer &a, size_t minSize) {
+	if (a.size < minSize) {
+		std::stringstream ss;
+		ss << "ipc::assertBufferSizeAtLeast: Failed: sizeof(a) = " << a.size << " < " << minSize;
+		throw std::runtime_error(ss.str());
+	}
+}
+
+// Op is `T (T a, T b)`
+// srcBuffer contains the data to be processed in parallel: packs of [T a, T b, T res, T padding]
+template <typename T, size_t BufferSize, typename Op>
+double computeCyleCountPerOpPipelined(const ipc::DurationMeasurer &durationMeasurer, const Buffer &srcBuffer, Buffer &buffer, Op &&op) {
+	assertBufferSize(srcBuffer, BufferSize);
+	assertBufferSize(srcBuffer, buffer.size);
+	assertBufferSizeMultipleOf(srcBuffer, sizeof(T) * 4);
+
+	constexpr size_t wordCount = BufferSize / sizeof(T);
+	constexpr size_t opCount = wordCount / 4;
+
+	auto sample = [&]() {
+		std::memcpy(buffer.data, srcBuffer.data, srcBuffer.size);
+		auto words = reinterpret_cast<T * const>(buffer.data);
+
+		return durationMeasurer.measure([&]() {
+			size_t off = 0;
+			for (size_t i = 0; i < opCount; i++) {
+				words[off + 2] = op(words[off + 0], words[off + 1]);
+				off += 4;
+			}
+		});
+	};
+
+	Duration durations[cycleCountIterationCount];
+	for (size_t inst = 0; inst < cycleCountIterationCount; inst++) {
+		for (size_t i = 0; i < 4; i++)
+			durations[inst] = sample();
+		durations[inst] = sample();
+	}
+
+	auto avgOpDuration = Duration::average(durations) / opCount;
+	return avgOpDuration.lengthCycles;
+}
 
 }
