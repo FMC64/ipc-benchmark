@@ -3,17 +3,74 @@
 #ifdef _WIN32
 
 #include <intrin.h>
+#include <windows.h>
 
 #else
 
 #include <x86intrin.h>
+#include <unistd.h>
+#include <string.h>
 
 #endif
 
 #include <cstdint>
 #include <chrono>
+#include <stdexcept>
+#include <sstream>
 
 namespace ipc {
+
+#ifdef _WIN32
+
+// Largely adapted from https://stackoverflow.com/a/17387176
+// Inefficient but who cares, everything is already going down if that gets called
+static inline std::string winGetLastError(void) {
+	//Get the error message ID, if any.
+	DWORD errorMessageID = ::GetLastError();
+	if (errorMessageID == 0) {
+		return std::string(); //No error message has been recorded
+	}
+
+	LPSTR messageBuffer = nullptr;
+
+	//Ask Win32 to give us the string version of that message ID.
+	//The parameters we pass in, tell Win32 to create the buffer that holds the message for us (because we don't yet know how long the message string will be).
+	size_t size = FormatMessageA(
+		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+		NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL
+	);
+
+	//Copy the error message into a std::string.
+	std::string message(messageBuffer, size);
+
+	//Free the Win32's string's buffer.
+	LocalFree(messageBuffer);
+	return message;
+}
+
+#endif
+
+static inline void setRealtime(void) {
+#ifdef _WIN32
+
+	auto res = SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS);
+	if (!res) {
+		std::stringstream ss;
+		ss << "setRealtime(_WIN32): " << winGetLastError();
+		throw std::runtime_error(ss.str());
+	}
+
+#else
+
+	auto res = nice(-20);
+	if (res == -1) {
+		std::stringstream ss;
+		ss << "setRealtime(unistd.h): " << strerror(errno);
+		throw std::runtime_error(ss.str());
+	}
+
+#endif
+}
 
 static inline size_t getClockTimestamp(void) {
 	return __rdtsc();
