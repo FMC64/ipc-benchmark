@@ -21,6 +21,8 @@
 #include <cstdio>
 #include <array>
 #include <cstring>
+#include <fstream>
+#include <vector>
 
 namespace ipc {
 
@@ -99,7 +101,55 @@ static inline std::string getCPUInfo(void)
 
 	#else
 
-	return "Not implemented";
+	std::ifstream input("/proc/cpuinfo", std::ios::in);
+	if (!input.good())
+		throw std::runtime_error("ipc::getCPUInfo: Could not open /proc/cpuinfo");
+
+	auto split = [](const std::string &str, char delim) {
+		std::stringstream tokenSs(str);
+		std::vector<std::string> tokens;
+		std::string token;
+		while (std::getline(tokenSs, token, delim))
+			tokens.emplace_back(token);
+		return tokens;
+	};
+
+	auto join = [](const std::vector<std::string> &strs) {
+		std::string res;
+		for (auto &str : strs)
+			res += str;
+		return res;
+	};
+
+	auto trim = [](const std::string &str) {
+		std::string res;
+		for (auto c : str) {
+			if (c == ' ' || c == '\n' || c == '\t' || c == '\r')
+				continue;
+			res.push_back(c);
+		}
+		return res;
+	};
+
+	std::string line;
+	while (std::getline(input, line)) {
+		auto sections = split(line, ':');
+		if (sections.size() < 2)
+			continue;
+
+		auto id = split(sections[0], ' ');
+		if (id.size() < 2)
+			continue;
+		if (trim(id[0]) == "model" && trim(id[1]) == "name") {
+			std::vector<std::string> modelName;
+			for (size_t i = 1; i < sections.size(); i++)
+				modelName.emplace_back(sections[i]);
+			modelName[0] = modelName[0].substr(1);
+			return join(modelName);
+		}
+	}
+
+	throw std::runtime_error("ipc::getCPUInfo: /proc/cpuinfo did not contain a single entry with 'model name'");
 
 	#endif
 }
