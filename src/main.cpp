@@ -5,8 +5,15 @@
 // Op is `T (T a, T b)`
 template <typename T, size_t BufferSize, typename Op>
 static inline void benchmarkOp(const ipc::DurationMeasurer &durationMeasurer, const ipc::Buffer &srcBuffer, ipc::Buffer &buffer, Op &&op, const char *opStr) {
-	auto cycleCount = ipc::computeCyleCountPerOpPipelined<T, BufferSize>(durationMeasurer, srcBuffer, buffer, std::forward<Op>(op));
-	std::printf("Op = %s pipelined, buffer size = %zu bytes: avg = %g cycles per operation\n", opStr, BufferSize, cycleCount);
+	{
+		auto pipelined = ipc::computeCyleCountPerOpPipelined<T, BufferSize>(durationMeasurer, srcBuffer, buffer, std::forward<Op>(op));
+		std::printf("Op = %s pipelined, buffer size = %zu bytes: avg = %g cycles per operation (%g MHz)\n", opStr, BufferSize, pipelined.lengthCycles, pipelined.inferredFrequencyMHz());
+	}
+
+	{
+		auto sequentially = ipc::computeCyleCountPerOpSequentially<T, BufferSize>(durationMeasurer, srcBuffer, buffer, std::forward<Op>(op));
+		std::printf("Op = %s sequentially, buffer size = %zu bytes: avg = %g cycles per operation (%g MHz)\n", opStr, BufferSize, sequentially.lengthCycles, sequentially.inferredFrequencyMHz());
+	}
 }
 
 template <size_t BufferSize>

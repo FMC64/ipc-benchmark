@@ -87,7 +87,7 @@ static inline void assertBufferSizeAtLeast(const Buffer &a, size_t minSize) {
 // Op is `T (T a, T b)`
 // srcBuffer contains the data to be processed in parallel: packs of [T a, T b, T res, T padding]
 template <typename T, size_t BufferSize, typename Op>
-double computeCyleCountPerOpPipelined(const ipc::DurationMeasurer &durationMeasurer, const Buffer &srcBuffer, Buffer &buffer, Op &&op) {
+Duration computeCyleCountPerOpPipelined(const ipc::DurationMeasurer &durationMeasurer, const Buffer &srcBuffer, Buffer &buffer, Op &&op) {
 	assertBufferSize(srcBuffer, BufferSize);
 	assertBufferSize(srcBuffer, buffer.size);
 	assertBufferSizeMultipleOf(srcBuffer, sizeof(T) * 4);
@@ -116,7 +116,44 @@ double computeCyleCountPerOpPipelined(const ipc::DurationMeasurer &durationMeasu
 	}
 
 	auto avgOpDuration = Duration::average(durations) / opCount;
-	return avgOpDuration.lengthCycles;
+	return avgOpDuration;
+}
+
+// Op is `T (T a, T b)`
+// srcBuffer contains the data to be processed serially: packs of [T first, T accumulated0, T accumulated1, ..., T res]
+template <typename T, size_t BufferSize, typename Op>
+Duration computeCyleCountPerOpSequentially(const ipc::DurationMeasurer &durationMeasurer, const Buffer &srcBuffer, Buffer &buffer, Op &&op) {
+	assertBufferSize(srcBuffer, BufferSize);
+	assertBufferSize(srcBuffer, buffer.size);
+	assertBufferSizeAtLeast(srcBuffer, sizeof(T) * 2);
+
+	constexpr size_t wordCount = BufferSize / sizeof(T);
+	constexpr size_t opCount = wordCount - 2;
+
+	auto sample = [&]() {
+		std::memcpy(buffer.data, srcBuffer.data, srcBuffer.size);
+		auto words = reinterpret_cast<T * const>(buffer.data);
+
+		return durationMeasurer.measure([&]() {
+			size_t off = 1;
+			T acc = words[0];
+			for (size_t i = 0; i < opCount; i++) {
+				acc = op(acc, words[off]);
+				off++;
+			}
+			words[wordCount - 1] = acc;
+		});
+	};
+
+	Duration durations[cycleCountIterationCount];
+	for (size_t inst = 0; inst < cycleCountIterationCount; inst++) {
+		for (size_t i = 0; i < 4; i++)
+			durations[inst] = sample();
+		durations[inst] = sample();
+	}
+
+	auto avgOpDuration = Duration::average(durations) / opCount;
+	return avgOpDuration;
 }
 
 }
