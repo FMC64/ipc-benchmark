@@ -4,7 +4,7 @@
 
 NULL =
 CXXFLAGS_ASAN =
-CXXFLAGS = -Wall -Wextra -std=c++23 -O3$(CXXFLAGS_ASAN)
+CXXFLAGS = -Wall -Wextra -std=c++23 -O3 -fno-tree-vectorize$(CXXFLAGS_ASAN)
 
 ifdef USE_ASAN
 	CXXFLAGS_ASAN = $(NULL) -g -fsanitize=address -fno-omit-frame-pointer
@@ -15,7 +15,7 @@ all: $(TARGET)
 
 SRC_DIR = ./src
 
-SRC = $(SRC_DIR)/main.cpp
+SRC = $(SRC_DIR)/main.cpp $(SRC_DIR)/data.cpp
 OBJ = $(SRC:.cpp=.o)
 
 $(TARGET): $(OBJ)
