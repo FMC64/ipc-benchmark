@@ -13,6 +13,11 @@
 
 #endif
 
+#include <Tchar.h>
+extern "C" {
+#include <WinRing0/OlsApi.h>
+}
+
 #include <cstdint>
 #include <chrono>
 #include <thread>
@@ -251,6 +256,14 @@ public:
 			.lengthSeconds = 0.0
 		})
 	{
+		{
+			if (!InitializeOls())
+				throw std::runtime_error("ipc::DurationMeasurer::InitOpenLibSys: Failure");
+		}
+		std::printf("WinRing0: initialized!\n");
+	}
+	~DurationMeasurer(void) {
+		DeinitializeOls();
 	}
 
 	// Only informative, do not use these timings yourself, measure already does the compensation by default

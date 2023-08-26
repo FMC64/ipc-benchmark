@@ -19,7 +19,7 @@ SRC = $(SRC_DIR)/main.cpp $(SRC_DIR)/data.cpp
 OBJ = $(SRC:.cpp=.o)
 
 $(TARGET): $(OBJ)
-	$(CXX) $(CXXFLAGS) $(OBJ) -o $(TARGET)
+	$(CXX) $(CXXFLAGS) $(OBJ) -lWinRing0x64 -o $(TARGET)
 
 clean:
 	rm -f $(OBJ) $(TARGET)
