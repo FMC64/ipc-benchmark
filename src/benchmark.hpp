@@ -117,16 +117,21 @@ Duration computeCyleCountPerOpPipelined(const ipc::DurationMeasurer &durationMea
 
 	auto sample = [&]() {
 		std::memcpy(buffer.data, srcBuffer.data, srcBuffer.size);
-		auto words = reinterpret_cast<T * const>(buffer.data);
+		volatile auto words = reinterpret_cast<T * const>(buffer.data);
 
 		return durationMeasurer.measure([&]() {
-			computeCyleCountPerOpPipelinedIteration<wordCount, 0>(words, std::forward<Op>(op));
+			constexpr size_t max = wordCount;
+
+			//computeCyleCountPerOpPipelinedIteration<wordCount, 0>(words, std::forward<Op>(op));
+			for (size_t i = 0; i < max; i += 4) {
+				words[i + 2] = op(words[i + 0], words[i + 1]);
+			}
 		});
 	};
 
 	Duration durations[cycleCountIterationCount];
 	for (size_t inst = 0; inst < cycleCountIterationCount; inst++) {
-		for (size_t i = 0; i < 4; i++)
+		for (size_t i = 0; i < 2; i++)
 			durations[inst] = sample();
 		durations[inst] = sample();
 	}
@@ -141,23 +146,27 @@ template <typename T, size_t BufferSize, typename Op>
 Duration computeCyleCountPerOpSequentially(const ipc::DurationMeasurer &durationMeasurer, const Buffer &srcBuffer, Buffer &buffer, Op &&op) {
 	assertBufferSizeAtLeast(srcBuffer, BufferSize);
 	assertBufferSize(srcBuffer, buffer.size);
-	assertBufferSizeAtLeast(srcBuffer, sizeof(T) * 2);
+	assertBufferSizeMultipleOf(srcBuffer, sizeof(T) * 4);
+	assertBufferSizeAtLeast(srcBuffer, sizeof(T) * 8);
 
 	constexpr size_t wordCount = BufferSize / sizeof(T);
-	constexpr size_t opCount = wordCount - 2;
+	constexpr size_t opCount = wordCount / 4 - 2;
 
 	auto sample = [&]() {
 		std::memcpy(buffer.data, srcBuffer.data, srcBuffer.size);
-		auto words = reinterpret_cast<T * const>(buffer.data);
+		volatile auto words = reinterpret_cast<T * const>(buffer.data);
 
 		return durationMeasurer.measure([&]() {
-			size_t off = 1;
-			T acc = words[0];
-			for (size_t i = 0; i < opCount; i++) {
-				acc = op(acc, words[off]);
-				off++;
+			constexpr size_t max = wordCount - 4;
+
+			size_t i = 0;
+			T acc = words[i];
+			i += 4;
+			for (; i < max; i += 4) {
+				acc = op(acc, words[i]);
+				words[i + 2] = words[i + 1];
 			}
-			words[wordCount - 1] = acc;
+			words[i] = acc;
 		});
 	};
 
