@@ -104,6 +104,11 @@ static inline void computeCyleCountPerOpPipelinedIteration(T * const words, Op &
 	}
 };
 
+template <size_t OpCount>
+static consteval size_t getRepeatCount(void) {
+	return (1 << 16) / OpCount;
+}
+
 // Op is `T (T a, T b)`
 // srcBuffer contains the data to be processed in parallel: packs of [T a, T b, T res, T padding]
 template <typename T, size_t BufferSize, typename Op>
@@ -115,6 +120,10 @@ Duration computeCyleCountPerOpPipelined(const ipc::DurationMeasurer &durationMea
 	constexpr size_t wordCount = BufferSize / sizeof(T);
 	constexpr size_t opCount = wordCount / 4;
 
+	static_assert(opCount > 0, "Must have at least a single op to measure");
+
+	constexpr size_t repeatCount = getRepeatCount<opCount>();
+
 	auto sample = [&]() {
 		std::memcpy(buffer.data, srcBuffer.data, srcBuffer.size);
 		volatile auto words = reinterpret_cast<T * const>(buffer.data);
@@ -123,20 +132,23 @@ Duration computeCyleCountPerOpPipelined(const ipc::DurationMeasurer &durationMea
 			constexpr size_t max = wordCount;
 
 			//computeCyleCountPerOpPipelinedIteration<wordCount, 0>(words, std::forward<Op>(op));
-			for (size_t i = 0; i < max; i += 4) {
-				words[i + 2] = op(words[i + 0], words[i + 1]);
+			for (size_t r = 0; r < repeatCount; r++) {
+				for (size_t i = 0; i < max; i += 4) {
+					words[i + 2] = op(words[i + 0], words[i + 1]);
+				}
 			}
 		});
 	};
 
 	Duration durations[cycleCountIterationCount];
 	for (size_t inst = 0; inst < cycleCountIterationCount; inst++) {
-		for (size_t i = 0; i < 2; i++)
-			durations[inst] = sample();
+		// Warmup
+		durations[inst] = sample();
+		// Actual
 		durations[inst] = sample();
 	}
 
-	auto avgOpDuration = Duration::average(durations) / opCount;
+	auto avgOpDuration = Duration::average(durations) / (opCount * repeatCount);
 	return avgOpDuration;
 }
 
@@ -152,6 +164,10 @@ Duration computeCyleCountPerOpSequentially(const ipc::DurationMeasurer &duration
 	constexpr size_t wordCount = BufferSize / sizeof(T);
 	constexpr size_t opCount = wordCount / 4 - 2;
 
+	static_assert(opCount > 0, "Must have at least a single op to measure");
+
+	constexpr size_t repeatCount = getRepeatCount<opCount>();
+
 	auto sample = [&]() {
 		std::memcpy(buffer.data, srcBuffer.data, srcBuffer.size);
 		volatile auto words = reinterpret_cast<T * const>(buffer.data);
@@ -159,25 +175,28 @@ Duration computeCyleCountPerOpSequentially(const ipc::DurationMeasurer &duration
 		return durationMeasurer.measure([&]() {
 			constexpr size_t max = wordCount - 4;
 
-			size_t i = 0;
-			T acc = words[i];
-			i += 4;
-			for (; i < max; i += 4) {
-				acc = op(acc, words[i]);
-				words[i + 2] = words[i + 1];
+			for (size_t r = 0; r < repeatCount; r++) {
+				size_t i = 0;
+				T acc = words[i];
+				i += 4;
+				for (; i < max; i += 4) {
+					acc = op(acc, words[i]);
+					words[i + 2] = words[i + 1];
+				}
+				words[i] = acc;
 			}
-			words[i] = acc;
 		});
 	};
 
 	Duration durations[cycleCountIterationCount];
 	for (size_t inst = 0; inst < cycleCountIterationCount; inst++) {
-		for (size_t i = 0; i < 4; i++)
-			durations[inst] = sample();
+		// Warmup
+		durations[inst] = sample();
+		// Actual
 		durations[inst] = sample();
 	}
 
-	auto avgOpDuration = Duration::average(durations) / opCount;
+	auto avgOpDuration = Duration::average(durations) / (opCount * repeatCount);
 	return avgOpDuration;
 }
 

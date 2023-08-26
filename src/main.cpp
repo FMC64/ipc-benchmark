@@ -127,14 +127,14 @@ int main(void) {
 		std::ofstream output("./report.csv", std::ios::out);
 		output << "CPU model, Operation, Execution, Buffer size [byte], Cycle count, Frequency [MHz]" << std::endl;
 
-		benchmark<1 << 6>(measurer, cpuInfoCStr, output);
+		//benchmark<1 << 6>(measurer, cpuInfoCStr, output);
 		benchmark<1 << 7>(measurer, cpuInfoCStr, output);
 		benchmark<1 << 8>(measurer, cpuInfoCStr, output);
 		benchmark<1 << 9>(measurer, cpuInfoCStr, output);
 		benchmark<1 << 10>(measurer, cpuInfoCStr, output);
-		benchmark<1 << 11>(measurer, cpuInfoCStr, output);
+		//benchmark<1 << 11>(measurer, cpuInfoCStr, output);
 		benchmark<1 << 12>(measurer, cpuInfoCStr, output);
-		benchmark<1 << 14>(measurer, cpuInfoCStr, output);
+		//benchmark<1 << 14>(measurer, cpuInfoCStr, output);
 		benchmark<1 << 16>(measurer, cpuInfoCStr, output);
 	} catch (const std::exception &e) {
 		std::fprintf(stderr, "FATAL ERROR: %s\n", e.what());
