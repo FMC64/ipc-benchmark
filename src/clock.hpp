@@ -328,7 +328,7 @@ class DurationMeasurer
 
 		if (vendor == "GenuineIntel") {
 			// Reference: Hardware/CPU/IntelCPU.cs
-			static std::set<size_t> supportedModels = {
+			static std::set<size_t> commonModels = {
 				0x2A, 0x2D,	// SandyBridge
 				0x3A, 0x3E,	// IvyBridge
 				0x3C, 0x3F, 0x45, 0x46,	// Haswell
@@ -344,12 +344,11 @@ class DurationMeasurer
 				0x86, 	// Tremont
 				0x8C, 0x8D,	// TigerLake
 			};
-
-			if (!supportedModels.contains(model)) {
-				std::stringstream ss;
-				ss << "ipc::DurationMeasurer:getFrequencyGetter: Unsupported model 0x" << std::hex << model << " for vendor '" << vendor << "'";
-				throw std::runtime_error(ss.str());
-			}
+			static std::set<size_t> nehalemModels = {
+				0x1A, 0x1E, 0x1F, 0x25, 0x2C, 0x2E, 0x2F
+			};
+			bool isNehalem = nehalemModels.contains(model);
+			bool isCommonModel = commonModels.contains(model);
 
 			auto getTscInvFactor = []() {
 				auto a = readMSR(0xCE);
@@ -357,11 +356,25 @@ class DurationMeasurer
 			};
 
 			double busClock = getTscFreq() / getTscInvFactor();
-			return [busClock]() {
-				auto a = readMSR(0x0198);
-				auto multiplier = static_cast<double>((a >> 8) & 0xff);
-				return busClock * multiplier;
-			};
+			if (isNehalem) {
+				return [busClock]() {
+					auto a = readMSR(0x0198);
+					auto multiplier = static_cast<double>(a & 0xff);
+					return busClock * multiplier;
+				};
+			} else if (isCommonModel) {
+				return [busClock]() {
+					auto a = readMSR(0x0198);
+					auto multiplier = static_cast<double>((a >> 8) & 0xff);
+					return busClock * multiplier;
+				};
+			} else {
+				return [busClock]() {
+					auto a = readMSR(0x0198);
+					auto multiplier = static_cast<double>((a >> 8) & 0x1f) + 0.5 * static_cast<double>((a >> 14) & 1);
+					return busClock * multiplier;
+				};
+			}
 		} else if (vendor == "AuthenticAMD") {
 			if (family == 0x17 || family == 0x19) {
 				// Reference: Hardware/CPU/AMD17CPU.cs
