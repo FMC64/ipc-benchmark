@@ -10,7 +10,7 @@ static inline constexpr auto meta = "Release = ipc-benchmark_v2.0.0";
 // Op is `T (T a, T b)`
 template <typename T, size_t BufferSize, typename Op>
 static inline void benchmarkOp(const ipc::DurationMeasurer &durationMeasurer, const ipc::Buffer &srcBuffer, ipc::Buffer &buffer, Op &&op, const char *opStr, const char *cpuInfo, std::ostream &output) {
-	if constexpr (BufferSize <= 4096) {
+	{
 		auto pipelined = ipc::computeCyleCountPerOpPipelined<T, BufferSize>(durationMeasurer, srcBuffer, buffer, std::forward<Op>(op));
 		std::printf("%s, Op = %s pipelined, buffer size = %zu bytes: avg = %g cycles per operation (%g MHz)\n", meta, opStr, BufferSize, pipelined.lengthCycles, pipelined.inferredFrequencyMHz());
 		output << meta << ", " << cpuInfo << ", " << opStr << ", Pipelined, " << BufferSize << ", " << pipelined.lengthCycles << ", " << pipelined.inferredFrequencyMHz() << std::endl;
