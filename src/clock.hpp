@@ -376,6 +376,7 @@ class DurationMeasurer
 				};
 			}
 		} else if (vendor == "AuthenticAMD") {
+			// TODO: support previous to Ryzen generations
 			if (family == 0x17 || family == 0x19) {
 				// Reference: Hardware/CPU/AMD17CPU.cs
 				auto getTscInvFactor = []() {
@@ -413,10 +414,10 @@ public:
 			.lengthSeconds = 0.0
 		})
 	{
-		for (size_t i = 0; i < 16; i++) {
+		/*for (size_t i = 0; i < 16; i++) {
 			std::printf("Current frequency: %g MHz\n", m_getFrequency() / 1.0e6);
 			std::this_thread::sleep_for(std::chrono::seconds(1));
-		}
+		}*/
 	}
 	~DurationMeasurer(void) {
 		DeinitializeOls();
@@ -431,14 +432,14 @@ public:
 	template <typename Fn>
 	Duration measure(Fn &&fn, bool compensate = true) const {
 		auto beginChrono = std::chrono::high_resolution_clock::now();
-		volatile auto begin = getTscTimestamp();
 		fn();
-		volatile auto end = getTscTimestamp();
 		auto endChrono = std::chrono::high_resolution_clock::now();
 
+		auto lengthSeconds = std::chrono::duration<double>(endChrono - beginChrono).count();
+
 		auto res = Duration{
-			.lengthCycles = static_cast<double>(end - begin),
-			.lengthSeconds = std::chrono::duration<double>(endChrono - beginChrono).count()
+			.lengthCycles = m_getFrequency() * lengthSeconds,
+			.lengthSeconds = lengthSeconds
 		};
 		if (compensate) {
 			if (res.lengthCycles > m_overhead.lengthCycles)
