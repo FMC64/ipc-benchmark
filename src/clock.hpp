@@ -28,6 +28,7 @@ extern "C" {
 #include <cstring>
 #include <fstream>
 #include <vector>
+#include <functional>
 
 namespace ipc {
 
@@ -199,7 +200,7 @@ static inline void setRealtime(void) {
 #endif
 }
 
-static inline size_t getClockTimestamp(void) {
+static inline size_t getTscTimestamp(void) {
 	return __rdtsc();
 }
 
@@ -241,6 +242,7 @@ struct Duration {
 
 class DurationMeasurer
 {
+	std::function<double (void)> m_getFrequency;
 	// How much time does sampling take
 	Duration m_overhead;
 
@@ -249,18 +251,124 @@ class DurationMeasurer
 	static inline constexpr size_t calibrationIterationCount = 1 << 8;
 	static inline constexpr double calibrationLengthSeconds = 4.0;
 
+	static inline void cpuID(DWORD index, DWORD *eax, DWORD *ebx, DWORD *ecx, DWORD *edx) {
+		DWORD beax, bebx, becx, bedx;
+		if (!Cpuid(index, eax != nullptr ? eax :& beax, ebx != nullptr ? ebx : &bebx, ecx != nullptr ? ecx : &becx, edx != nullptr ? edx : &bedx)) {
+			std::stringstream ss;
+			ss << "ipc::DurationMeasurer::cpuID: Could not read index 0x" << std::hex << index;
+			throw std::runtime_error(ss.str());
+		}
+	}
+
+	static inline uint64_t readMSR(DWORD index) {
+		DWORD low, high;
+		if (!Rdmsr(index, &low, &high)) {
+			std::stringstream ss;
+			ss << "ipc::DurationMeasurer::readMSR: Could not read index 0x" << std::hex << index;
+			throw std::runtime_error(ss.str());
+		}
+		return (static_cast<uint64_t>(high) << 32) | static_cast<uint64_t>(low);
+	}
+
+	// This funcion is largely ported from https://github.com/openhardwaremonitor/openhardwaremonitor
+	static inline std::function<double (void)> getFrequencyGetter(void) {
+		{
+			if (!InitializeOls())
+				throw std::runtime_error("ipc::DurationMeasurer::InitOpenLibSys: Failure. Is the WinRing0 service installed & running?");
+		}
+		if (!IsMsr())
+			throw std::runtime_error("ipc::DurationMeasurer::IsMsr: Failure. Cannot read MSRs.");
+		std::printf("WinRing0: Initialized!\n");
+
+		std::string vendor;
+		size_t family;
+		std::vector<DWORD> payload;
+		{
+			DWORD lastCPUIDIndex = 0, vendorReg[3];
+			cpuID(0, &lastCPUIDIndex, &vendorReg[0], &vendorReg[2], &vendorReg[1]);
+			if (lastCPUIDIndex == 0)
+				throw std::runtime_error("ipc::DurationMeasurer:getFrequencyGetter: CPUID index 0 failed: lastCPUIDIndex is zero");
+			size_t CPUIDCount = lastCPUIDIndex + 1;
+			size_t payloadSize = CPUIDCount * 4;
+			payload.resize(payloadSize);
+			for (size_t i = 0; i < CPUIDCount; i++) {
+				auto offd = &payload[i * 4];
+				cpuID(i, &offd[0], &offd[1], &offd[2], &offd[3]);
+			}
+
+			auto appendRegToString = [](DWORD reg, std::string &dst) {
+				static_assert(sizeof(DWORD) == 4, "DWORD size must be 4");
+				for (size_t i = 0; i < 4; i++)
+					dst.push_back((reg >> (i * 8)) & 0xFF);
+			};
+			for (size_t i = 0; i < 3; i++)
+				appendRegToString(vendorReg[i], vendor);
+			auto familyCode = payload[4 * 1];
+			family = ((familyCode & 0x0FF00000) >> 20) + ((familyCode & 0x0F00) >> 8);
+
+			std::printf("Vendor: %s, family = %zx\n", vendor.c_str(), family);
+		}
+
+		auto getTscFreq = []() {
+			std::printf("Estimating TSC frequency..\n");
+			auto bef = std::chrono::high_resolution_clock::now();
+			auto tscBef = __rdtsc();
+			std::this_thread::sleep_for(std::chrono::seconds(4));
+			auto aft = std::chrono::high_resolution_clock::now();
+			auto tscAft = __rdtsc();
+
+			auto res = static_cast<double>(tscAft - tscBef) / static_cast<std::chrono::duration<double>>(aft - bef).count();
+			std::printf("TSC at %g MHz\n", res / 1.0e6);
+
+			return res;
+		};
+
+		if (vendor == "GenuineIntel") {
+			auto tscFreq = getTscFreq();
+			return [tscFreq]() {
+				return tscFreq;
+			};
+		} else if (vendor == "AuthenticAMD") {
+			if (family == 0x17 || family == 0x19) {
+				auto getTscInvFactor = []() {
+					auto a = readMSR(0xC0010064);
+					auto cpuDfsId = (a >> 8) & 0x3f;
+					auto cpuFid = a & 0xff;
+					return 2.0 * static_cast<double>(cpuFid) / static_cast<double>(cpuDfsId);
+				};
+
+				double busClock = getTscFreq() / getTscInvFactor();
+				return [busClock]() {
+					auto a = readMSR(0xc0010293);
+					auto cpuDfsId = (a >> 8) & 0x3f;
+					auto cpuFid = a & 0xff;
+					auto multiplier = 2.0 * static_cast<double>(cpuFid) / static_cast<double>(cpuDfsId);
+					return busClock * multiplier;
+				};
+			} else {
+				std::stringstream ss;
+				ss << "ipc::DurationMeasurer:getFrequencyGetter: Unsupported family 0x" << std::hex << family << " for vendor '" << vendor << "'";
+				throw std::runtime_error(ss.str());
+			}
+		} else {
+			std::stringstream ss;
+			ss << "ipc::DurationMeasurer:getFrequencyGetter: Unknown vendor '" << vendor << "'";
+			throw std::runtime_error(ss.str());
+		}
+	}
+
 public:
 	DurationMeasurer(void) :
+		m_getFrequency(getFrequencyGetter()),
 		m_overhead({
 			.lengthCycles = 0.0,
 			.lengthSeconds = 0.0
 		})
 	{
-		{
-			if (!InitializeOls())
-				throw std::runtime_error("ipc::DurationMeasurer::InitOpenLibSys: Failure");
+		for (size_t i = 0; i < 16; i++) {
+			std::printf("Current frequency: %g MHz\n", m_getFrequency() / 1.0e6);
+			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
-		std::printf("WinRing0: initialized!\n");
 	}
 	~DurationMeasurer(void) {
 		DeinitializeOls();
@@ -275,9 +383,9 @@ public:
 	template <typename Fn>
 	Duration measure(Fn &&fn, bool compensate = true) const {
 		auto beginChrono = std::chrono::high_resolution_clock::now();
-		volatile auto begin = getClockTimestamp();
+		volatile auto begin = getTscTimestamp();
 		fn();
-		volatile auto end = getClockTimestamp();
+		volatile auto end = getTscTimestamp();
 		auto endChrono = std::chrono::high_resolution_clock::now();
 
 		auto res = Duration{
