@@ -376,8 +376,19 @@ class DurationMeasurer
 				};
 			}
 		} else if (vendor == "AuthenticAMD") {
-			// TODO: support previous to Ryzen generations
-			if (family == 0x17 || family == 0x19) {
+			if (family == 0x0F) {
+				// Reference: Hardware/CPU/AMD0FCPU.cs
+				auto tscFreq = getTscFreq();
+				return [tscFreq]() {
+					auto a = readMSR(0xC0010042);
+					double curMP = 0.5 * static_cast<double>((a & 0x3F) + 8);
+					double maxMP = 0.5 * static_cast<double>((a >> 16 & 0x3F) + 8);
+					return curMP * tscFreq / maxMP;
+				};
+			} else if (family == 0x10 || family == 0x11 || family == 0x12 || family == 0x14 || family == 0x15 || family == 0x16) {
+				// Reference: Hardware/CPU/AMD10CPU.cs
+				throw std::runtime_error("ipc::DurationMeasurer:getFrequencyGetter: Unsupported AMD10 CPU D:");
+			} else if (family == 0x17 || family == 0x19) {
 				// Reference: Hardware/CPU/AMD17CPU.cs
 				auto getTscInvFactor = []() {
 					auto a = readMSR(0xC0010064);
@@ -396,7 +407,7 @@ class DurationMeasurer
 				};
 			} else {
 				std::stringstream ss;
-				ss << "ipc::DurationMeasurer:getFrequencyGetter: Unsupported family 0x" << std::hex << family << " for vendor '" << vendor << "'";
+				ss << "ipc::DurationMeasurer:getFrequencyGetter: Unknown family 0x" << std::hex << family << " for vendor '" << vendor << "'";
 				throw std::runtime_error(ss.str());
 			}
 		} else {

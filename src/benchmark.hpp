@@ -106,7 +106,7 @@ static inline void computeCyleCountPerOpPipelinedIteration(T * const words, Op &
 
 template <size_t OpCount>
 static consteval size_t getRepeatCount(void) {
-	return (1 << 16) / OpCount;
+	return (1 << 14) / OpCount;
 }
 
 // Op is `T (T a, T b)`
