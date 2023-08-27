@@ -1,4 +1,9 @@
-# How to install
+# Note
+- The instructions under `How to install` and `How to uninstall` are for users that do not want to rely on OpenHardwareMonitor to run the program.
+	- You do not need to follow these instructions if you have OpenHardwareMonitor open while running `ipc-benchmark.exe`.
+	- A release of OpenHardwareMonitor can be found here: https://openhardwaremonitor.org/downloads/
+
+## How to install
 
 - First, from this directory start a `cmd.exe` or Powershell prompt as Administrator and run `enable_test_services.bat`
 	- This will allow self-signed services such as `WinRing0x64.sys` to be installed
@@ -9,7 +14,7 @@
 	- At this point, the `WinRing0x64.sys` service is installed and running
 - You can now run `ipc-benchmark.exe` (needs Administrator prompt as well)
 
-# How to uninstall
+## How to uninstall
 
 - From this directory start a `cmd.exe` or Powershell prompt as Administrator and run `uninstall_winring0_service.bat`
 	- This will stop `WinRing0x64.sys`, delete the service and remove it from system files

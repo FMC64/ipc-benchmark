@@ -5,19 +5,21 @@
 #include "benchmark.hpp"
 #include "data.hpp"
 
+static inline constexpr auto meta = "Release = ipc-benchmark_v2.0.0";
+
 // Op is `T (T a, T b)`
 template <typename T, size_t BufferSize, typename Op>
 static inline void benchmarkOp(const ipc::DurationMeasurer &durationMeasurer, const ipc::Buffer &srcBuffer, ipc::Buffer &buffer, Op &&op, const char *opStr, const char *cpuInfo, std::ostream &output) {
 	if constexpr (BufferSize <= 4096) {
 		auto pipelined = ipc::computeCyleCountPerOpPipelined<T, BufferSize>(durationMeasurer, srcBuffer, buffer, std::forward<Op>(op));
-		std::printf("Op = %s pipelined, buffer size = %zu bytes: avg = %g cycles per operation (%g MHz)\n", opStr, BufferSize, pipelined.lengthCycles, pipelined.inferredFrequencyMHz());
-		output << cpuInfo << ", " << opStr << ", Pipelined, " << BufferSize << ", " << pipelined.lengthCycles << ", " << pipelined.inferredFrequencyMHz() << std::endl;
+		std::printf("%s, Op = %s pipelined, buffer size = %zu bytes: avg = %g cycles per operation (%g MHz)\n", meta, opStr, BufferSize, pipelined.lengthCycles, pipelined.inferredFrequencyMHz());
+		output << meta << ", " << cpuInfo << ", " << opStr << ", Pipelined, " << BufferSize << ", " << pipelined.lengthCycles << ", " << pipelined.inferredFrequencyMHz() << std::endl;
 	}
 
 	{
 		auto sequentially = ipc::computeCyleCountPerOpSequentially<T, BufferSize>(durationMeasurer, srcBuffer, buffer, std::forward<Op>(op));
-		std::printf("Op = %s sequentially, buffer size = %zu bytes: avg = %g cycles per operation (%g MHz)\n", opStr, BufferSize, sequentially.lengthCycles, sequentially.inferredFrequencyMHz());
-		output << cpuInfo << ", " << opStr << ", Sequentially, " << BufferSize << ", " << sequentially.lengthCycles << ", " << sequentially.inferredFrequencyMHz() << std::endl;
+		std::printf("%s, Op = %s sequentially, buffer size = %zu bytes: avg = %g cycles per operation (%g MHz)\n", meta, opStr, BufferSize, sequentially.lengthCycles, sequentially.inferredFrequencyMHz());
+		output << meta << ", " << cpuInfo << ", " << opStr << ", Sequentially, " << BufferSize << ", " << sequentially.lengthCycles << ", " << sequentially.inferredFrequencyMHz() << std::endl;
 	}
 }
 
@@ -125,7 +127,7 @@ int main(void) {
 		std::printf("\n");
 
 		std::ofstream output("./report.csv", std::ios::out);
-		output << "CPU model, Operation, Execution, Buffer size [byte], Cycle count, Frequency [MHz]" << std::endl;
+		output << "Meta, CPU model, Operation, Execution, Buffer size [byte], Cycle count, Frequency [MHz]" << std::endl;
 
 		//benchmark<1 << 6>(measurer, cpuInfoCStr, output);
 		benchmark<1 << 7>(measurer, cpuInfoCStr, output);

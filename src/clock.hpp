@@ -275,7 +275,7 @@ class DurationMeasurer
 	static inline std::function<double (void)> getFrequencyGetter(void) {
 		{
 			if (!InitializeOls())
-				throw std::runtime_error("ipc::DurationMeasurer::InitOpenLibSys: Failure. Is the WinRing0 service installed & running?");
+				throw std::runtime_error("ipc::DurationMeasurer::InitOpenLibSys: Failure. Is the WinRing0 service installed & running? Alternatively, you can have OpenHardwareMonitor running to make this service available too.");
 		}
 		if (!IsMsr())
 			throw std::runtime_error("ipc::DurationMeasurer::IsMsr: Failure. Cannot read MSRs.");
