@@ -29,6 +29,7 @@ extern "C" {
 #include <fstream>
 #include <vector>
 #include <functional>
+#include <set>
 
 namespace ipc {
 
@@ -282,6 +283,7 @@ class DurationMeasurer
 
 		std::string vendor;
 		size_t family;
+		size_t model;
 		std::vector<DWORD> payload;
 		{
 			DWORD lastCPUIDIndex = 0, vendorReg[3];
@@ -305,8 +307,9 @@ class DurationMeasurer
 				appendRegToString(vendorReg[i], vendor);
 			auto familyCode = payload[4 * 1];
 			family = ((familyCode & 0x0FF00000) >> 20) + ((familyCode & 0x0F00) >> 8);
+			model = ((familyCode & 0x0F0000) >> 12) + ((familyCode & 0xF0) >> 4);
 
-			std::printf("Vendor: %s, family = %zx\n", vendor.c_str(), family);
+			std::printf("Vendor: %s, family = 0x%zx, model = 0x%zx\n", vendor.c_str(), family, model);
 		}
 
 		auto getTscFreq = []() {
@@ -324,12 +327,44 @@ class DurationMeasurer
 		};
 
 		if (vendor == "GenuineIntel") {
-			auto tscFreq = getTscFreq();
-			return [tscFreq]() {
-				return tscFreq;
+			// Reference: Hardware/CPU/IntelCPU.cs
+			static std::set<size_t> supportedModels = {
+				0x2A, 0x2D,	// SandyBridge
+				0x3A, 0x3E,	// IvyBridge
+				0x3C, 0x3F, 0x45, 0x46,	// Haswell
+				0x3D, 0x47, 0x4F, 0x56,	// Boardwell
+				0x37, 0x4A, 0x4D, 0x5A, 0x5D,	// Silvermont
+				0x4E, 0x5E, 0x55,	// Skylake
+				0x8E, 0x9E,	// KabyLake
+				0x5C, 0x5F, 	// Goldmont
+				0x7A,	// GoldmontPlus
+				0x66,	// CannonLake
+				0x7D, 0x7E, 0x6A, 0x6C,	// IceLake
+				0xA5, 0xA6,	// CometLake
+				0x86, 	// Tremont
+				0x8C, 0x8D,	// TigerLake
+			};
+
+			if (!supportedModels.contains(model)) {
+				std::stringstream ss;
+				ss << "ipc::DurationMeasurer:getFrequencyGetter: Unsupported model 0x" << std::hex << model << " for vendor '" << vendor << "'";
+				throw std::runtime_error(ss.str());
+			}
+
+			auto getTscInvFactor = []() {
+				auto a = readMSR(0xCE);
+				return static_cast<double>((a >> 8) & 0xff);
+			};
+
+			double busClock = getTscFreq() / getTscInvFactor();
+			return [busClock]() {
+				auto a = readMSR(0x0198);
+				auto multiplier = static_cast<double>((a >> 8) & 0xff);
+				return busClock * multiplier;
 			};
 		} else if (vendor == "AuthenticAMD") {
 			if (family == 0x17 || family == 0x19) {
+				// Reference: Hardware/CPU/AMD17CPU.cs
 				auto getTscInvFactor = []() {
 					auto a = readMSR(0xC0010064);
 					auto cpuDfsId = (a >> 8) & 0x3f;
